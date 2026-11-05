@@ -1,0 +1,13 @@
+{
+  "name": "ai-naming-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI起名平台：多模型流式起名，Vercel + Supabase",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "dotenv": "^16.4.5"
+  }
+}

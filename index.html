@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI起名平台</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(160deg, #f6f1e7 0%, #efe4d3 100%);
+    min-height: 100vh; color: #2f2a26; padding: 32px 16px;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 { font-size: 34px; letter-spacing: 8px; color: #8c2f24; }
+  header p { margin-top: 8px; color: #7a6f63; font-size: 14px; letter-spacing: 2px; }
+  .card {
+    background: #fff; border-radius: 14px; padding: 24px;
+    box-shadow: 0 6px 24px rgba(120, 90, 60, .10); margin-bottom: 20px;
+  }
+  label { display: block; font-size: 14px; color: #6b5f52; margin-bottom: 8px; }
+  select, textarea {
+    width: 100%; border: 1px solid #e0d5c4; border-radius: 10px;
+    padding: 12px 14px; font-size: 15px; background: #fffdf9; color: #2f2a26;
+    outline: none; transition: border-color .2s; font-family: inherit;
+  }
+  select:focus, textarea:focus { border-color: #b23b2e; }
+  textarea { min-height: 96px; resize: vertical; margin-top: 16px; }
+  button {
+    margin-top: 18px; width: 100%; padding: 14px;
+    background: linear-gradient(135deg, #b23b2e, #8c2f24);
+    color: #fff; font-size: 17px; letter-spacing: 8px; border: none;
+    border-radius: 10px; cursor: pointer; transition: opacity .2s;
+  }
+  button:hover { opacity: .9; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .status { margin-top: 12px; font-size: 13px; color: #8a7d6d; min-height: 18px; }
+  .output-title { font-size: 16px; color: #8c2f24; margin-bottom: 12px; letter-spacing: 2px; }
+  #output { line-height: 1.9; font-size: 15px; word-break: break-word; }
+  #output h3, #output h4 { color: #8c2f24; margin: 14px 0 6px; }
+  #output strong { color: #b23b2e; }
+  .placeholder { color: #b3a394; }
+  .cursor { display: inline-block; width: 8px; height: 16px; background: #b23b2e; animation: blink 1s infinite; vertical-align: middle; }
+  @keyframes blink { 50% { opacity: 0; } }
+  footer { text-align: center; color: #9a8d7c; font-size: 12px; margin-top: 8px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>AI起名平台</h1>
+    <p>多模型切换 · SSE 流式输出 · 起名历史实时存入 Supabase</p>
+  </header>
+
+  <div class="card">
+    <label for="model">选择大模型</label>
+    <select id="model">
+      <option value="doubao">豆包（火山方舟）</option>
+      <option value="deepseek">DeepSeek</option>
+      <option value="qwen">通义千问（DashScope）</option>
+      <option value="kimi">Kimi（月之暗面）</option>
+    </select>
+    <label for="requirement" style="margin-top:16px">起名需求（可写姓氏、性别、风格、期望等）</label>
+    <textarea id="requirement" placeholder="例如：姓李，男孩，想要一个有诗词出处的国风名字，简洁好写"></textarea>
+    <button id="btn" onclick="generate()">开始起名</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card">
+    <div class="output-title">起名方案</div>
+    <div id="output"><span class="placeholder">名字方案将在这里逐字显示……</span></div>
+  </div>
+
+  <footer>Vercel Serverless · Supabase · OpenAI 兼容多模型（豆包 / DeepSeek / 通义千问 / Kimi）</footer>
+</div>
+
+<script>
+  const output = document.getElementById('output');
+  const statusEl = document.getElementById('status');
+  const btn = document.getElementById('btn');
+  let acc = '';
+  let warned = false;
+
+  function renderMarkdown(text) {
+    const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return escaped
+      .replace(/^#{2,4}\s*(.+)$/gm, '<h4>$1</h4>')
+      .replace(/^#\s*(.+)$/gm, '<h3>$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\n/g, '<br>');
+  }
+
+  async function generate() {
+    const requirement = document.getElementById('requirement').value.trim();
+    const model = document.getElementById('model').value;
+    if (!requirement) { statusEl.textContent = '请先填写起名需求'; return; }
+
+    acc = '';
+    warned = false;
+    output.innerHTML = '<span class="cursor"></span>';
+    btn.disabled = true;
+    statusEl.textContent = '正在连接模型……';
+
+    try {
+      const resp = await fetch('/api/name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requirement: requirement, model: model })
+      });
+      if (!resp.ok) {
+        const e = await resp.json().catch(() => ({}));
+        statusEl.textContent = e.error || ('请求失败（' + resp.status + '）');
+        output.innerHTML = '<span class="placeholder">名字方案将在这里逐字显示……</span>';
+        btn.disabled = false;
+        return;
+      }
+      statusEl.textContent = '模型正在生成名字方案……';
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() || '';
+        for (const part of parts) {
+          for (const line of part.split('\n')) {
+            if (!line.startsWith('data:')) continue;
+            try {
+              const msg = JSON.parse(line.slice(5).trim());
+              if (msg.type === 'delta') {
+                acc += msg.content;
+                output.innerHTML = renderMarkdown(acc) + '<span class="cursor"></span>';
+              } else if (msg.type === 'warn' || msg.type === 'error') {
+                warned = true;
+                statusEl.textContent = msg.content;
+              } else if (msg.type === 'done') {
+                if (!warned) statusEl.textContent = '生成完成，起名历史已保存到 Supabase';
+              }
+            } catch (e) {}
+          }
+        }
+      }
+      output.innerHTML = acc ? renderMarkdown(acc) : '<span class="placeholder">没有收到生成内容，请检查模型密钥配置</span>';
+    } catch (e) {
+      statusEl.textContent = '网络异常：' + e.message;
+    }
+    btn.disabled = false;
+  }
+</script>
+</body>
+</html>
