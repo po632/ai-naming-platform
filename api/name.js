@@ -29,6 +29,13 @@ const modelConfigMap = {
     baseURL: 'https://api.moonshot.cn/v1',
     apiKey: process.env.MOONSHOT_API_KEY,
     model: 'moonshot-v1-8k'
+  },
+  siliconflow: {
+    label: '硅基流动（SiliconFlow）',
+    baseURL: 'https://api.siliconflow.cn/v1',
+    apiKey: process.env.SILICONFLOW_API_KEY,
+    // 默认使用 DeepSeek-V3；可用环境变量 SILICONFLOW_MODEL 覆盖为硅基流动上的其他模型
+    model: process.env.SILICONFLOW_MODEL || 'deepseek-ai/DeepSeek-V3'
   }
 };
 
